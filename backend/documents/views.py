@@ -5,6 +5,8 @@ from rest_framework import status
 from .models import Document
 from .serializers import DocumentSerializer
 
+from core.services.ai_service import analyze_document
+
 import pdfplumber
 
 
@@ -27,13 +29,19 @@ class UploadDocumentView(APIView):
 
             with pdfplumber.open(uploaded_file) as pdf:
 
+                total_pages = len(pdf.pages)
+
                 for page in pdf.pages:
 
                     text = page.extract_text()
 
                     if text:
-                        extracted_text += text
+                        extracted_text += text + "\n"
 
+            # AI ANALYSIS
+            ai_analysis = analyze_document(extracted_text)
+
+            # SAVE DOCUMENT
             document = Document.objects.create(
                 file=uploaded_file,
                 extracted_text=extracted_text
@@ -42,9 +50,22 @@ class UploadDocumentView(APIView):
             serializer = DocumentSerializer(document)
 
             return Response({
+
                 "message": "File processed successfully",
+
                 "document": serializer.data,
-                "text": extracted_text[:3000]
+
+                "metadata": {
+                    "file_name": uploaded_file.name,
+                    "file_size": uploaded_file.size,
+                    "pages": total_pages,
+                    "doc_type": "PDF"
+                },
+
+                "extracted_text": extracted_text[:3000],
+
+                "ai_analysis": ai_analysis
+
             })
 
         except Exception as e:
